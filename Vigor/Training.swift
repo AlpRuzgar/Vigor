@@ -48,10 +48,16 @@ struct TimeBasedExercise: Exercise {
 }
 
 struct Workout {
+    var date: Date
     var exercises: [any WorkoutComponent]
 }
 
-struct RunSession {
+protocol CardioExercise {
+    var duration: TimeInterval { get set }
+}
+
+struct RunSession: CardioExercise {
+    var date: Date
     var distance: Measurement<UnitLength>
     var duration: TimeInterval
     var checkpoints: [Checkpoint]

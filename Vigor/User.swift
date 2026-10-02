@@ -41,7 +41,7 @@ struct User: Identifiable {
     var weight: Measurement<UnitMass>
     var height: Measurement<UnitLength>
     
-    var runSessions: [RunSession]
+    var cardios: [CardioExercise]
     var workouts: [Workout]
     
     //TODO: profil statları için yeni değerler e. total distance ran
