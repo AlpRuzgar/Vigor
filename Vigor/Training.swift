@@ -83,13 +83,29 @@ protocol CardioExercise {
     var duration: TimeInterval { get set }
 }
 
-struct RunSession: CardioExercise {
+@Model
+final class RunSession: CardioExercise {
     var date: Date
-    var distance: Measurement<UnitLength>
+    var distanceMeters: Double
     var duration: TimeInterval
-    var checkpoints: [Checkpoint]
+    var points: [RoutePoint]
+
+    // Kaydedilmez, sadece okumak için
+    var distance: Measurement<UnitLength> {
+        Measurement(value: distanceMeters, unit: .meters)
+    }
+
+    init(date: Date, distanceMeters: Double, duration: TimeInterval, points: [RoutePoint]) {
+        self.date = date
+        self.distanceMeters = distanceMeters
+        self.duration = duration
+        self.points = points
+    }
 }
 
-struct Checkpoint {
-    //keeping track of all stats every x seconds on a run
+struct RoutePoint: Codable, Hashable {
+    var latitude: Double
+    var longitude: Double
+    var altitude: Double
+    var timestamp: Date
 }
