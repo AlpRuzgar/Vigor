@@ -6,6 +6,6 @@ import SwiftData
         WindowGroup {
             MainView()
         }
-        .modelContainer(for: RunSession.self)
+        .modelContainer(for: [User.self, RunSession.self])
     }
 }
