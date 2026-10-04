@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct MainView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query private var users: [User]
     
     var body: some View {
@@ -24,6 +25,7 @@ struct MainView: View {
                 }
             }
         }
+        .task { ExerciseSeeder.seedIfNeeded(modelContext) }
     }
 }
 
