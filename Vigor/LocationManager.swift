@@ -15,11 +15,15 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     var currentLocation: CLLocation?
     var authorizationStatus: CLAuthorizationStatus
 
+    // Yeni bir konum geldiğinde dışarıya haber verir
+    var onNewLocation: ((CLLocation) -> Void)?
+
     override init() {
         authorizationStatus = manager.authorizationStatus
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = 10 // metre
     }
 
     func requestAuthorization() {
@@ -40,5 +44,9 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         currentLocation = locations.last
+        // Birden fazla konum aynı anda gelebilir, hepsini sırayla ilet
+        for location in locations {
+            onNewLocation?(location)
+        }
     }
 }

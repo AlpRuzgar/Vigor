@@ -41,6 +41,8 @@ struct User: Identifiable {
     var weight: Measurement<UnitMass>
     var height: Measurement<UnitLength>
     
+//    var targetDistance
+    
     var cardios: [CardioExercise]
     var workouts: [Workout]
     
