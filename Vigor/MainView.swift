@@ -16,7 +16,7 @@ struct MainView: View {
                         HomeView()
                     }
                     Tab("Run", systemImage: "figure.run") {
-                        RunningView()
+                        CardioView()
                     }
                     Tab("Workout", systemImage: "dumbbell") {
                         WorkoutView()

@@ -24,16 +24,16 @@ struct WorkoutView: View {
             switch stage {
             case .idle:
                 startingMenu()
-            case .runStarted:
+            case .active:
                 activeMenu()
-            case .runEnded:
+            case .ended:
                 endingMenu()
             }
         }
         .onAppear {
             // Uygulama kapanıp açıldıysa yarım kalan antrenmana dön
             if stage == .idle, activeWorkouts.first != nil {
-                stage = .runStarted
+                stage = .active
             }
         }
         .sheet(isPresented: $showPicker) {
@@ -52,7 +52,7 @@ struct WorkoutView: View {
         Button("Antrenmana Başla") {
             modelContext.insert(Workout())
             withAnimation(.spring) {
-                stage = .runStarted
+                stage = .active
             }
         }
         .buttonStyle(.borderedProminent)
@@ -80,7 +80,7 @@ struct WorkoutView: View {
                         workout.endDate = .now
                         finishedWorkout = workout
                         withAnimation {
-                            stage = .runEnded
+                            stage = .ended
                         }
                     }
                     Button("Devam et", role: .cancel) { }

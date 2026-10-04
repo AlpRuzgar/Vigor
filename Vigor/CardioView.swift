@@ -11,16 +11,18 @@ import SwiftData
 
 enum Stage {
     case idle
-    case runStarted
-    case runEnded
+    case active
+    case ended
 }
 
-struct RunningView: View {
+struct CardioView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var stage: Stage = .idle
     @State private var showEndConfirmation = false
-    @State private var tracker = RunTracker()
+    @State private var tracker = CardioTracker()
+    
+    @State private var selectedActivity: CardioActivity = .running
     
     private var elapsedString: String {
         let minutes = Int(tracker.elapsed) / 60
@@ -67,10 +69,10 @@ struct RunningView: View {
                     switch stage {
                     case .idle:
                         startingMenu()
-                    case .runStarted:
-                        runMenu()
-                    case .runEnded:
-                        endingMenu()
+                    case .active:
+                        activeMenu()
+                    case .ended:
+                        endedMenu()
                     }
                 }
                 .padding()
@@ -85,10 +87,17 @@ struct RunningView: View {
     @ViewBuilder
     private func startingMenu() -> some View {
         VStack {
+            Picker("Aktivite", selection: $selectedActivity) {
+                ForEach(CardioActivity.allCases, id: \.self) {
+                    Label($0.title, systemImage: $0.systemImage).tag($0)
+                }
+            }
+            .pickerStyle(.segmented)
+
             Button("Start Run") {
                 tracker.start()
                 withAnimation(.spring) {
-                    stage = .runStarted
+                    stage = .active
                 }
             }
         }
@@ -96,7 +105,7 @@ struct RunningView: View {
     }
     
     @ViewBuilder
-    private func runMenu() -> some View {
+    private func activeMenu() -> some View {
         VStack(spacing: 20) {
             InfoCard(title: "Distance", value: distanceString, color: .primaryPink)
             HStack(spacing: 12){
@@ -121,7 +130,7 @@ struct RunningView: View {
                         modelContext.insert(session)
                     }
                     withAnimation {
-                        stage = .runEnded
+                        stage = .ended
                     }
                 }
                 Button("Continue", role: .cancel) { }
@@ -130,7 +139,7 @@ struct RunningView: View {
     }
 
     @ViewBuilder
-    private func endingMenu() -> some View {
+    private func endedMenu() -> some View {
         VStack {
             Text("End")
         }
@@ -141,7 +150,7 @@ struct RunningView: View {
 //TODO: use stitch for ui design
 
 #Preview {
-    RunningView()
+    CardioView()
 }
 
 extension View {

@@ -6,7 +6,7 @@ import SwiftData
         WindowGroup {
             MainView()
         }
-        .modelContainer(for: [User.self, RunSession.self,
+        .modelContainer(for: [User.self, CardioSession.self,
                               ExerciseType.self, Workout.self,
                               WorkoutEntry.self, ExerciseSet.self])
     }

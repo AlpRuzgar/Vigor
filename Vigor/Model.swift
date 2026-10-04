@@ -18,6 +18,29 @@ enum ExerciseKind: String, Codable {
     case timed      // süre (+ opsiyonel kilo)
 }
 
+enum CardioActivity: String, Codable, CaseIterable {
+    case running, walking, cycling
+
+    var title: String {
+        switch self {
+        case .running: "Koşu"
+        case .walking: "Yürüyüş"
+        case .cycling: "Bisiklet"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .running: "figure.run"
+        case .walking: "figure.walk"
+        case .cycling: "figure.outdoor.cycle"
+        }
+    }
+
+    // Bisiklette pace yerine km/h gösterilir
+    var showsPace: Bool { self != .cycling }
+}
+
 // Kütüphanedeki egzersiz tanımı
 @Model
 final class ExerciseType {
@@ -84,11 +107,13 @@ protocol CardioExercise {
 }
 
 @Model
-final class RunSession: CardioExercise {
+final class CardioSession: CardioExercise {
+    var activity: CardioActivity = CardioActivity.running
     var date: Date
     var distanceMeters: Double
     var duration: TimeInterval
     var points: [RoutePoint]
+    var laps: [Lap] = []
 
     // Kaydedilmez, sadece okumak için
     var distance: Measurement<UnitLength> {
@@ -108,4 +133,10 @@ struct RoutePoint: Codable, Hashable {
     var longitude: Double
     var altitude: Double
     var timestamp: Date
+}
+
+struct Lap: Codable, Hashable {
+    var index: Int
+    var distanceMeters: Double
+    var duration: TimeInterval
 }
