@@ -1,7 +1,9 @@
 import SwiftUI
-import Playgrounds
+import SwiftData
 
 struct MainView: View {
+    @Environment(\.modelContext) private var modelContext
+    
     var body: some View {
         TabView {
             Tab("Home", systemImage: "house") {
@@ -17,6 +19,7 @@ struct MainView: View {
                 ProfileView()
             }
         }
+        .task { ExerciseSeeder.seedIfNeeded(modelContext) }
     }
 }
 

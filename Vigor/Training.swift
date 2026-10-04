@@ -8,48 +8,75 @@
 import Foundation
 import SwiftData
 
-enum TargetMuscle {
-    case back
-    case chest
+enum TargetMuscle: String, Codable, CaseIterable {
+    case chest, back, shoulders, biceps, triceps, forearms
+    case abs, glutes, quads, hamstrings, calves
 }
 
-
-protocol WorkoutComponent {
-    var name: String { get set }
-    var orderIndex: Int { get set }
-}
-    
-struct Rest: WorkoutComponent {
-    var name: String = "Rest"
-    var orderIndex: Int
+enum ExerciseKind: String, Codable {
+    case repetition // tekrar + kilo
+    case timed      // süre (+ opsiyonel kilo)
 }
 
-protocol Exercise: WorkoutComponent {
-    var targetMuscles: [TargetMuscle] { get set }
-}
-
-struct RepetitionExercise: Exercise {
-    var targetMuscles: [TargetMuscle]
+// Kütüphanedeki egzersiz tanımı
+@Model
+final class ExerciseType {
     var name: String
-    var orderIndex: Int
-    
-    var sets: Int
-    var reps: Int
-    var weight: Measurement<UnitMass>
-}
-
-struct TimeBasedExercise: Exercise {
     var targetMuscles: [TargetMuscle]
-    var name: String
-    var orderIndex: Int
-    
-    var time: TimeInterval
-    var weight: Measurement<UnitMass>? //For weighted time based exercises 
+    var kind: ExerciseKind
+
+    init(name: String, targetMuscles: [TargetMuscle], kind: ExerciseKind = .repetition) {
+        self.name = name
+        self.targetMuscles = targetMuscles
+        self.kind = kind
+    }
 }
 
-struct Workout {
-    var date: Date
-    var exercises: [any WorkoutComponent]
+// Bir antrenman
+@Model
+final class Workout {
+    var startDate: Date
+    var endDate: Date?
+
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutEntry.workout)
+    var entries: [WorkoutEntry] = []
+
+    init(startDate: Date = .now) {
+        self.startDate = startDate
+    }
+}
+
+// Antrenmandaki bir egzersiz kaydı
+@Model
+final class WorkoutEntry {
+    var orderIndex: Int
+    var workout: Workout?
+    var exercise: ExerciseType?
+
+    @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.entry)
+    var sets: [ExerciseSet] = []
+
+    init(orderIndex: Int, exercise: ExerciseType) {
+        self.orderIndex = orderIndex
+        self.exercise = exercise
+    }
+}
+
+// Tek bir set
+@Model
+final class ExerciseSet {
+    var orderIndex: Int
+    var reps: Int?
+    var weightKg: Double?
+    var duration: TimeInterval?
+    var entry: WorkoutEntry?
+
+    init(orderIndex: Int, reps: Int? = nil, weightKg: Double? = nil, duration: TimeInterval? = nil) {
+        self.orderIndex = orderIndex
+        self.reps = reps
+        self.weightKg = weightKg
+        self.duration = duration
+    }
 }
 
 protocol CardioExercise {
