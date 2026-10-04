@@ -6,43 +6,42 @@
 //
 
 import Foundation
+import SwiftData
 
-enum Avatar {
-    case bear
-    case rabbit
-    case deer
-    
+enum Avatar: String, Codable, CaseIterable {
+    case bear, rabbit, deer
+
     var title: String {
         switch self {
-        case .bear:
-            "Bear"
-        case .rabbit:
-            "Rabbit"
-        case .deer:
-            "Deer"
+        case .bear: "Bear"
+        case .rabbit: "Rabbit"
+        case .deer: "Deer"
         }
     }
-    
-    //TODO: resimleri ekle
 }
 
-enum Sex {
-    case male
-    case female
-    case unspecified
+enum Sex: String, Codable, CaseIterable {
+    case male, female, unspecified
 }
 
-struct User: Identifiable {
-    var id = UUID()
+@Model
+final class User {
     var avatar: Avatar
     var name: String
     var bday: Date
     var sex: Sex
-    var weight: Measurement<UnitMass>
-    var height: Measurement<UnitLength>
-    
-    var cardios: [CardioExercise]
-    var workouts: [Workout]
-    
-    //TODO: profil statları için yeni değerler e. total distance ran
+    var weightKg: Double
+    var heightCm: Double
+
+    var weight: Measurement<UnitMass> { .init(value: weightKg, unit: .kilograms) }
+    var height: Measurement<UnitLength> { .init(value: heightCm, unit: .centimeters) }
+
+    init(avatar: Avatar, name: String, bday: Date, sex: Sex, weightKg: Double, heightCm: Double) {
+        self.avatar = avatar
+        self.name = name
+        self.bday = bday
+        self.sex = sex
+        self.weightKg = weightKg
+        self.heightCm = heightCm
+    }
 }

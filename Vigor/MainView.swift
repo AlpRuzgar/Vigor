@@ -1,20 +1,27 @@
 import SwiftUI
-import Playgrounds
+import SwiftData
 
 struct MainView: View {
+    @Query private var users: [User]
+    
     var body: some View {
-        TabView {
-            Tab("Home", systemImage: "house") {
-                HomeView()
-            }
-            Tab("Run", systemImage: "figure.run") {
-                RunningView()
-            }
-            Tab("Workout", systemImage: "dumbbell") {
-                WorkoutView()
-            }
-            Tab("Profile", systemImage: "person") {
-                ProfileView()
+        if users.first == nil {
+            ProfileSetupView()
+        }
+        else {
+            TabView {
+                Tab("Home", systemImage: "house") {
+                    HomeView()
+                }
+                Tab("Run", systemImage: "figure.run") {
+                    RunningView()
+                }
+                Tab("Workout", systemImage: "dumbbell") {
+                    WorkoutView()
+                }
+                Tab("Profile", systemImage: "person") {
+                    ProfileView()
+                }
             }
         }
     }
