@@ -31,6 +31,7 @@ final class CardioTracker {
     private var lapStartTime: TimeInterval = 0   // koşu süresi (duraklama hariç)
     
     private(set) var activity: CardioActivity = .running
+    private(set) var cardioGoal: CardioGoal = CardioGoal(type: .free, value: 0)
         
     let lm = LocationManager()
     
@@ -45,7 +46,7 @@ final class CardioTracker {
     // Geçen süre: bitmişse bitiş anına, değilse şu ana kadar
     var elapsed: TimeInterval {
         guard let startDate else { return 0 }
-        return (endDate ?? .now).timeIntervalSince(startDate)
+        return (endDate ?? pauseStart ?? .now).timeIntervalSince(startDate) - pausedDuration
     }
     
     // Anlık pace: saniye/km. Yeterli veri yoksa nil.
@@ -70,9 +71,18 @@ final class CardioTracker {
         return nil // henüz 100 m birikmedi
     }
     
-    func start() {
+    var currentValue: Double {
+        switch cardioGoal.type {
+        case .free: 0
+        case .distance: distance
+        case .duration: elapsed / 60
+        }
+    }
+    
+    func start(activity: CardioActivity, cardioGoal: CardioGoal) {
         guard state == .idle || state == .ended else { return }
         self.activity = activity
+        self.cardioGoal = cardioGoal
         locations = []
         distance = 0
         pausedDuration = 0
@@ -138,12 +148,14 @@ final class CardioTracker {
     }
     
     func makeSession() -> CardioSession? {
-        guard let startDate, let endDate, !locations.isEmpty else { return nil }
+        guard let startDate, !locations.isEmpty else { return nil }
         return CardioSession(
+            activity: activity,
             date: startDate,
             distanceMeters: distance,
-            duration: endDate.timeIntervalSince(startDate),
-            points: locations.map { RoutePoint($0) }
+            duration: elapsed,
+            points: locations.map { RoutePoint($0) },
+            laps: laps
         )
     }
 }

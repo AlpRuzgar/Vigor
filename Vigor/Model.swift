@@ -20,7 +20,7 @@ enum ExerciseKind: String, Codable {
 
 enum CardioActivity: String, Codable, CaseIterable {
     case running, walking, cycling
-
+    
     var title: String {
         switch self {
         case .running: "Koşu"
@@ -28,7 +28,7 @@ enum CardioActivity: String, Codable, CaseIterable {
         case .cycling: "Bisiklet"
         }
     }
-
+    
     var systemImage: String {
         switch self {
         case .running: "figure.run"
@@ -36,9 +36,73 @@ enum CardioActivity: String, Codable, CaseIterable {
         case .cycling: "figure.outdoor.cycle"
         }
     }
-
+    
     // Bisiklette pace yerine km/h gösterilir
     var showsPace: Bool { self != .cycling }
+}
+
+enum TargetType: String, Codable, CaseIterable {
+    case free,distance, duration
+    
+    var name: String {
+        switch self {
+        case .free:
+            "Free"
+        case .distance:
+            "Distance"
+        case .duration:
+            "Time"
+        }
+    }
+    var arrayIndex: Int {
+        switch self {
+        case .free:
+            -1
+        case .distance:
+            0
+        case .duration:
+            1
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .free:
+            "infinity"
+        case .distance:
+            "ruler"
+        case .duration:
+            "timer"
+        }
+    }
+    var unit: String {
+        switch self {
+        case .free: ""
+        case .distance: "km"
+        case .duration: "min"
+        }
+    }
+    var range: ClosedRange<Double> {
+        switch self {
+        case .free: 0...0
+        case .distance: 1...42
+        case .duration: 5...180
+        }
+    }
+    var step: Double {
+        switch self {
+        case .free: 0
+        case .distance: 0.5
+        case .duration: 5
+        }
+    }
+    var defaultValue: Double { range.lowerBound * 5}
+}
+
+
+struct CardioGoal {
+    var type: TargetType
+    var value: Double
 }
 
 // Kütüphanedeki egzersiz tanımı
@@ -47,7 +111,7 @@ final class ExerciseType {
     var name: String
     var targetMuscles: [TargetMuscle]
     var kind: ExerciseKind
-
+    
     init(name: String, targetMuscles: [TargetMuscle], kind: ExerciseKind = .repetition) {
         self.name = name
         self.targetMuscles = targetMuscles
@@ -60,10 +124,10 @@ final class ExerciseType {
 final class Workout {
     var startDate: Date
     var endDate: Date?
-
+    
     @Relationship(deleteRule: .cascade, inverse: \WorkoutEntry.workout)
     var entries: [WorkoutEntry] = []
-
+    
     init(startDate: Date = .now) {
         self.startDate = startDate
     }
@@ -75,10 +139,10 @@ final class WorkoutEntry {
     var orderIndex: Int
     var workout: Workout?
     var exercise: ExerciseType?
-
+    
     @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.entry)
     var sets: [ExerciseSet] = []
-
+    
     init(orderIndex: Int, exercise: ExerciseType) {
         self.orderIndex = orderIndex
         self.exercise = exercise
@@ -93,7 +157,7 @@ final class ExerciseSet {
     var weightKg: Double?
     var duration: TimeInterval?
     var entry: WorkoutEntry?
-
+    
     init(orderIndex: Int, reps: Int? = nil, weightKg: Double? = nil, duration: TimeInterval? = nil) {
         self.orderIndex = orderIndex
         self.reps = reps
@@ -114,18 +178,24 @@ final class CardioSession: CardioExercise {
     var duration: TimeInterval
     var points: [RoutePoint]
     var laps: [Lap] = []
-
+    
     // Kaydedilmez, sadece okumak için
     var distance: Measurement<UnitLength> {
         Measurement(value: distanceMeters, unit: .meters)
     }
-
-    init(date: Date, distanceMeters: Double, duration: TimeInterval, points: [RoutePoint]) {
+    init(activity: CardioActivity, date: Date, distanceMeters: Double,
+         duration: TimeInterval, points: [RoutePoint], laps: [Lap] = []) {
+        self.activity = activity
         self.date = date
         self.distanceMeters = distanceMeters
         self.duration = duration
         self.points = points
+        self.laps = laps
     }
+    
+    var targetType: TargetType = TargetType.free
+    var targetValue: Double?
+    var targetInterval: TimeInterval?
 }
 
 struct RoutePoint: Codable, Hashable {

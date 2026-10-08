@@ -156,7 +156,7 @@ private struct SetRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text("\(number)")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.neonBlue)
                 .frame(width: 24)
 
             switch kind {

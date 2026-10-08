@@ -32,7 +32,7 @@ struct ExercisePickerView: View {
                         Text(exercise.name)
                         Text(exercise.targetMuscles.map { $0.rawValue.capitalized }.joined(separator: ", "))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.neonBlue)
                     }
                 }
                 .foregroundStyle(.primary)
