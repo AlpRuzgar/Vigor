@@ -32,7 +32,7 @@ final class CardioTracker {
     
     private(set) var activity: CardioActivity = .running
     private(set) var cardioGoal: CardioGoal = CardioGoal(type: .free, value: 0)
-        
+
     let lm = LocationManager()
     
     init() {
@@ -71,11 +71,12 @@ final class CardioTracker {
         return nil // henüz 100 m birikmedi
     }
     
-    var currentValue: Double {
+    func currentValue(for user: User) -> Double {
         switch cardioGoal.type {
         case .free: 0
-        case .distance: distance
+        case .distance: distance / 1000 // hedef km cinsinden
         case .duration: elapsed / 60
+        case .calories: user.calories(for: activity, duration: elapsed)
         }
     }
     
@@ -169,3 +170,7 @@ extension RoutePoint {
         )
     }
 }
+
+//TODO: Kalp atışı
+//TODO: Yükseklik kazanımı
+

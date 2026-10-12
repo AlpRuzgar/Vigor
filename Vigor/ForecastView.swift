@@ -13,6 +13,11 @@ import Combine
 struct ForecastView: View {
     var location: CLLocation?
     @StateObject private var weatherManager = WeatherManager()
+    @State private var locationTimedOut = false
+    @State private var waitAttempt = 0
+
+    private var isWaitingForLocation: Bool { location == nil }
+
     var body: some View {
         VStack {
             if let current = weatherManager.currentWeather {
@@ -75,8 +80,38 @@ struct ForecastView: View {
                 }
             }
             else if let errorMessage = weatherManager.errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.black)
+                ContentUnavailableView {
+                    Label("Weather Unavailable", systemImage: "cloud.slash")
+                        .foregroundStyle(.voltRed)
+                        .font(.spaceGrotesk(size: 24))
+                } description: {
+                    Text(errorMessage)
+                        .font(.plusJakartaSans(size: 14))
+                        .foregroundStyle(.white.opacity(0.6))
+                } actions: {
+                    Button("Refresh") {
+                        guard let location else { return }
+                        Task { await weatherManager.fetchWeather(for: location) }
+                    }
+                    .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
+                }
+            }
+            else if locationTimedOut {
+                ContentUnavailableView {
+                    Label("Location Unavailable", systemImage: "location.slash")
+                        .foregroundStyle(.voltRed)
+                        .font(.spaceGrotesk(size: 24))
+                } description: {
+                    Text("We couldn't determine your location. Check that Location Services are enabled and try again.")
+                        .font(.plusJakartaSans(size: 14))
+                        .foregroundStyle(.white.opacity(0.6))
+                } actions: {
+                    Button("Retry") {
+                        locationTimedOut = false
+                        waitAttempt += 1
+                    }
+                    .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
+                }
             }
             else {
                 ProgressView()
@@ -88,6 +123,19 @@ struct ForecastView: View {
         .task(id: location) {
             guard let location else { return }
             await weatherManager.fetchWeather(for: location)
+        }
+        .task(id: "\(isWaitingForLocation)-\(waitAttempt)") {
+            guard isWaitingForLocation else {
+                locationTimedOut = false
+                return
+            }
+            locationTimedOut = false
+            do {
+                try await Task.sleep(for: .seconds(8))
+            } catch {
+                return
+            }
+            locationTimedOut = true
         }
     }
 }

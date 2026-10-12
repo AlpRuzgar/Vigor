@@ -7,10 +7,7 @@ struct MainView: View {
     
     var body: some View {
         Group {
-            if users.first == nil {
-                ProfileSetupView()
-            }
-            else {
+            if let user = users.first {
                 TabView {
                     Tab("Home", systemImage: "house") {
                         HomeView()
@@ -25,6 +22,10 @@ struct MainView: View {
                         ProfileView()
                     }
                 }
+                .environment(user)
+            }
+            else {
+                ProfileSetupView()
             }
         }
         .task { ExerciseSeeder.seedIfNeeded(modelContext) }

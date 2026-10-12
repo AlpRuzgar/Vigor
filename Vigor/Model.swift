@@ -39,11 +39,20 @@ enum CardioActivity: String, Codable, CaseIterable {
     
     // Bisiklette pace yerine km/h gösterilir
     var showsPace: Bool { self != .cycling }
+
+    // Ortalama tempo için yaklaşık MET değerleri
+    var met: Double {
+        switch self {
+        case .running: 9.8
+        case .walking: 3.5
+        case .cycling: 7.5
+        }
+    }
 }
 
-enum TargetType: String, Codable, CaseIterable {
-    case free,distance, duration
-    
+enum GoalType: String, Codable, CaseIterable {
+    case free, distance, duration, calories
+
     var name: String {
         switch self {
         case .free:
@@ -52,6 +61,8 @@ enum TargetType: String, Codable, CaseIterable {
             "Distance"
         case .duration:
             "Time"
+        case .calories:
+            "Calories"
         }
     }
     var arrayIndex: Int {
@@ -62,9 +73,11 @@ enum TargetType: String, Codable, CaseIterable {
             0
         case .duration:
             1
+        case .calories:
+            2
         }
     }
-    
+
     var systemImage: String {
         switch self {
         case .free:
@@ -73,6 +86,8 @@ enum TargetType: String, Codable, CaseIterable {
             "ruler"
         case .duration:
             "timer"
+        case .calories:
+            "flame.fill"
         }
     }
     var unit: String {
@@ -80,6 +95,7 @@ enum TargetType: String, Codable, CaseIterable {
         case .free: ""
         case .distance: "km"
         case .duration: "min"
+        case .calories: "kcal"
         }
     }
     var range: ClosedRange<Double> {
@@ -87,6 +103,7 @@ enum TargetType: String, Codable, CaseIterable {
         case .free: 0...0
         case .distance: 1...42
         case .duration: 5...180
+        case .calories: 50...1500
         }
     }
     var step: Double {
@@ -94,6 +111,7 @@ enum TargetType: String, Codable, CaseIterable {
         case .free: 0
         case .distance: 0.5
         case .duration: 5
+        case .calories: 50
         }
     }
     var defaultValue: Double { range.lowerBound * 5}
@@ -101,7 +119,7 @@ enum TargetType: String, Codable, CaseIterable {
 
 
 struct CardioGoal {
-    var type: TargetType
+    var type: GoalType
     var value: Double
 }
 
@@ -155,14 +173,12 @@ final class ExerciseSet {
     var orderIndex: Int
     var reps: Int?
     var weightKg: Double?
-    var duration: TimeInterval?
     var entry: WorkoutEntry?
     
-    init(orderIndex: Int, reps: Int? = nil, weightKg: Double? = nil, duration: TimeInterval? = nil) {
+    init(orderIndex: Int, reps: Int? = nil, weightKg: Double? = nil) {
         self.orderIndex = orderIndex
         self.reps = reps
         self.weightKg = weightKg
-        self.duration = duration
     }
 }
 
@@ -193,9 +209,9 @@ final class CardioSession: CardioExercise {
         self.laps = laps
     }
     
-    var targetType: TargetType = TargetType.free
-    var targetValue: Double?
-    var targetInterval: TimeInterval?
+    var goalType: GoalType = GoalType.free
+    var goalValue: Double?
+    var goalInterval: TimeInterval?
 }
 
 struct RoutePoint: Codable, Hashable {
@@ -209,4 +225,5 @@ struct Lap: Codable, Hashable {
     var index: Int
     var distanceMeters: Double
     var duration: TimeInterval
+    var pace: TimeInterval { (duration / 60) / (distanceMeters * 1000) }
 }

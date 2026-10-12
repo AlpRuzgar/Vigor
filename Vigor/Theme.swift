@@ -44,7 +44,7 @@ extension ButtonStyle where Self == NeonButtonStyle {
 }
 
 struct CustomStepper: View {
-    var type: TargetType
+    var type: GoalType
     var isFree: Bool {
         type == .free
     }
@@ -52,10 +52,11 @@ struct CustomStepper: View {
     var body: some View {
         VStack (spacing: 20) {
             HStack {
-                StepperButton(symbol: "minus") {
+                StepperButton(symbol: "minus", foregroundColor: .white, backgroundColor: .coldBlack.mix(with: .white, by: 0.2)) {
                     value -= type.step
                 }
                 .disabled(value <= type.range.lowerBound || isFree)
+
                 Spacer()
                 Text(isFree ? "Free" : "\(value.formatted(.number.precision(.fractionLength(type == .distance ? 1: 0))))")
                     .font(.plusJakartaSansBold(size: 30))
@@ -69,14 +70,17 @@ struct CustomStepper: View {
                 }
                 .disabled(value >= type.range.upperBound || isFree)
             }
-            .background(.coldBlack.mix(with: .white, by: 0.2))
+            .background(.coldBlack.mix(with: .white, by: 0.1))
             .clipShape(Capsule())
         }
+
     }
 }
 
 struct StepperButton: View {
-    let symbol: String
+    var symbol: String
+    var foregroundColor: Color = .coldBlack
+    var backgroundColor: Color = .electricLime
     let action: () -> Void
     var body: some View {
         Button {
@@ -86,7 +90,37 @@ struct StepperButton: View {
                 .font(.spaceGroteskBold(size: 24))
         }
         .frame(width: 60, height: 60)
-        .foregroundStyle(.coldBlack)
-        .background(.electricLime)
+        .foregroundStyle(foregroundColor)
+        .background(backgroundColor)
     }
-} 
+}
+
+struct InfoCard: View {
+    var title: String
+    var icon: String
+    var value: String
+    var color: Color
+    var isMain = false
+    var goalText: String?
+    var body: some View {
+        VStack(alignment: isMain ? .center : .leading) {
+            HStack {
+                Text("\(title): ")
+                    .font(.plusJakartaSans(size: 14))
+                    .foregroundStyle(.white)
+                if !isMain {
+                    Spacer()
+                    Image(systemName: icon)
+                        .foregroundStyle(color)
+                }
+            }
+            Text(value)
+                .font(.spaceGroteskBold(size: isMain ? 36 : 24))
+                .foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity, alignment: isMain ? .center : .leading)
+        .frame(height: 46)
+        .padding()
+        .card()
+    }
+}

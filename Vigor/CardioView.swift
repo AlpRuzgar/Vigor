@@ -17,26 +17,28 @@ enum Stage {
 
 struct CardioView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(User.self) private var user
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
-    @State private var stage: Stage = .ended
+    @State private var stage: Stage = .idle
     @State private var isVisible = false
     @State private var showEndConfirmation = false
     @State private var tracker = CardioTracker()
+    @State private var endedSession: CardioSession?
     
     @State private var selectedActivity: CardioActivity = .running
-    @State private var selectedTargetType: TargetType = .free
-    @State private var targetValue: Double = 5
+    @State private var selectedGoalType: GoalType = .free
+    @State private var goalValue: Double = 5
     @State private var cardOrder: [Int] = [0, 1, 2]
     
     var infoCards: [InfoCard] {
         let cards = [
             InfoCard(title: "Distance", icon: "ruler", value: distanceString, color: .electricLime),
             InfoCard(title: "Time", icon: "timer", value: elapsedString, color: .white),
-            InfoCard(title: "Calories", icon: "flame.fill", value: "calories", color: .electricLime)
+            InfoCard(title: "Calories", icon: "flame.fill", value: caloriesString, color: .electricLime)
         ]
         var ordered = cardOrder.map { cards[$0] }
         ordered[0].isMain = true
-        ordered[0].targetText = goalString
+        ordered[0].goalText = goalString
         return ordered
     }
     
@@ -44,7 +46,7 @@ struct CardioView: View {
         let s = Int(seconds)
         return String(format: "%02d:%02d", s / 60, s % 60)
     }
-
+    
     private var goalString: String? {
         let goal = tracker.cardioGoal
         switch goal.type {
@@ -57,6 +59,8 @@ struct CardioView: View {
                                         numberFormatStyle: .number.precision(.fractionLength(0...1))))
         case .duration: // değer dakika
             return timeString(goal.value * 60)
+        case .calories:
+            return "\(Int(goal.value)) kcal"
         }
     }
     
@@ -68,34 +72,100 @@ struct CardioView: View {
         Measurement(value: tracker.distance, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
     }
-        
+    
     private var paceString: String {
         guard let pace = tracker.currentPace, pace < 1800 else { return "--:-- /km" }
-        let minutes = Int(pace) / 60
-        let seconds = Int(pace) % 60
-        return String(format: "%d:%02d /km", minutes, seconds)
+        return timeString(pace)
     }
-        
+    
+    // Ortalama tempo (koşu/yürüyüş) ya da ortalama hız (bisiklet)
+    private var averageString: String {
+        let km = tracker.distance / 1000
+        guard km > 0, tracker.elapsed > 0 else { return "--" }
+        if tracker.activity.showsPace {
+            let pace = Int(tracker.elapsed / km)
+            return String(format: "%d:%02d /km", pace / 60, pace % 60)
+        }
+        return String(format: "%.1f km/h", km / (tracker.elapsed / 3600))
+    }
+    
+    private var caloriesString: String {
+        let kcal = user.calories(for: tracker.activity, duration: tracker.elapsed)
+        return "\(Int(kcal)) kcal"
+    }
+    
+    // Sadece tam (1 km) lap'ler karşılaştırılır; son yarım lap tempoyu yanıltabilir
+    private var fastestLap: Lap? {
+        guard tracker.laps.count > 1 else { return nil }
+        return tracker.laps
+            .filter { $0.distanceMeters >= 1000 }
+            .min { $0.duration < $1.duration }
+    }
+    
     var isPaused: Bool { tracker.state == .paused }
     
-    var body: some View {
-        ScrollView {
-            VStack (spacing: 20){
-                VStack {
-                    switch stage {
-                    case .idle:
-                        startingMenu()
-                    case .active:
-                        activeMenu()
-                    case .ended:
-                        endedMenu()
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .padding()
+    var paceDif: Double {
+        guard let last = tracker.laps.last, let currentPace = tracker.currentPace else { return 0 }
+        let gap = currentPace - last.pace
+        return gap / last.pace
+    }
+    var paceDifString: String { paceDif.formatted(.percent.precision(.fractionLength(1))) }
+    var isFaster: Bool { paceDif > 0 }
+    
+    private var isLocationUnavailable: Bool {
+        switch tracker.lm.authorizationStatus {
+        case .denied, .restricted:
+            return true
+        default:
+            return tracker.lm.currentLocation == nil
         }
-        .background(.coldBlack)
+    }
+
+    var title: String {
+        switch stage {
+        case .idle:
+            "Cardio"
+        case .active:
+            "Active"
+        case .ended:
+            "Summary"
+        }
+    }
+    
+    var body: some View {
+        ScrollViewReader { proxy in
+            NavigationStack{
+                ScrollView {
+                    VStack (spacing: 20){
+                        VStack {
+                            switch stage {
+                            case .idle:
+                                startingMenu()
+                            case .active:
+                                activeMenu()
+                            case .ended:
+                                if let endedSession {
+                                    CardioDetailsView(cardioSession: endedSession, showsToolbar: false)
+                                } else {
+                                    unrecordedSessionNotice()
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding()
+                    .id("top")
+                }
+                .background(.coldBlack)
+                .navigationBarTitleDisplayMode(.inline)
+                .customToolbar(title: title)
+            }
+            .onChange(of: stage) {
+                withAnimation {
+                    proxy.scrollTo("top", anchor: .top)
+                }
+            }
+        }
         .scrollClipDisabled()
         
         .onAppear {
@@ -110,22 +180,13 @@ struct CardioView: View {
     @ViewBuilder
     private func startingMenu() -> some View {
         VStack (spacing: 32) {
-            HStack{
-                Image(systemName: "play.fill")
-                    .font(.plusJakartaSansBold(size: 20))
-                    .opacity(isVisible ? 0.2 : 1)
-                    .neonShadow(.electricLime)
-                Text("Start a Run")
-                    .font(.plusJakartaSansBold(size: 32))
-                Spacer()
-            }
-            .foregroundStyle(.electricLime)
-
             ForecastView(location: tracker.lm.currentLocation)
             
             VStack{
                 Text("Aktivite seç")
                     .foregroundStyle(.white)
+                    .font(.plusJakartaSans(size: 16))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 HStack{
                     ForEach(CardioActivity.allCases, id: \.self) { activity in
                         PickerElement(selected: $selectedActivity, activity: activity, isSelected: selectedActivity == activity)
@@ -138,45 +199,55 @@ struct CardioView: View {
                 }
                 .card()
             }
-                        
+            
             VStack(spacing: 12) {
                 Text("Hedef Tipi")
                     .foregroundStyle(.white)
                     .font(.plusJakartaSans(size: 16))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]){
-                    ForEach(TargetType.allCases, id: \.self) { type in
-                        TargetOption(targetValue: $targetValue ,type: type, isSelected: selectedTargetType == type)
+                    ForEach(GoalType.allCases, id: \.self) { type in
+                        GoalOption(goalValue: $goalValue ,type: type, isSelected: selectedGoalType == type)
                             .onTapGesture {
                                 withAnimation {
-                                    selectedTargetType = type
-                                    targetValue = selectedTargetType.defaultValue
+                                    selectedGoalType = type
+                                    goalValue = selectedGoalType.defaultValue
                                 }
                             }
                     }
                 }
                 .padding(8)
-                .card()
             }
             
             VStack {
                 HStack {
                     Image(systemName: "slider.horizontal.3")
                         .foregroundStyle(.electricLime)
-                    Text("Target Type: \(selectedTargetType.name)")
+                    Text("Goal Type: \(selectedGoalType.name)")
                         .font(.plusJakartaSans(size: 16))
                         .foregroundStyle(.white)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
-                CustomStepper(type: selectedTargetType, value: $targetValue)
+                CustomStepper(type: selectedGoalType, value: $goalValue)
             }
             
             
-            Button("Start Run") {
-                tracker.start(activity: selectedActivity, cardioGoal: CardioGoal(type: selectedTargetType, value: targetValue))
-                if selectedTargetType != .free {
-                    let removed = cardOrder.remove(at: selectedTargetType.arrayIndex)
+            if isLocationUnavailable {
+                HStack(spacing: 8) {
+                    Image(systemName: "location.slash.fill")
+                        .foregroundStyle(.voltRed)
+                    Text("Waiting for GPS signal. Start is disabled until your location is available.")
+                        .font(.plusJakartaSans(size: 13))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button("Start Cardio") {
+                tracker.start(activity: selectedActivity, cardioGoal: CardioGoal(type: selectedGoalType, value: goalValue))
+                if selectedGoalType != .free {
+                    let removed = cardOrder.remove(at: selectedGoalType.arrayIndex)
                     cardOrder.insert(removed, at: 0)
                 }
                 withAnimation(.spring) {
@@ -184,31 +255,32 @@ struct CardioView: View {
                 }
             }
             .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
+            .disabled(isLocationUnavailable)
         }
     }
-    
+
+    @ViewBuilder
+    private func unrecordedSessionNotice() -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "location.slash.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.electricLime)
+            Text("Session Not Recorded")
+                .font(.plusJakartaSansBold(size: 20))
+                .foregroundStyle(.white)
+            Text("We couldn't get any location data for this session!")
+                .font(.plusJakartaSans(size: 14))
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 40)
+        .frame(maxWidth: .infinity)
+    }
+
     @ViewBuilder
     private func activeMenu() -> some View {
         VStack(spacing: 20) {
-            HStack{
-                Image(systemName: "record.circle")
-                    .font(.plusJakartaSansBold(size: 20))
-                    .foregroundStyle(.red)
-                    .neonShadow(.red)
-                    .opacity(isVisible ? 0.2 : 1)
-                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isVisible)
-                Text("Active Run")
-                    .font(.plusJakartaSansBold(size: 32))
-                    .foregroundStyle(.electricLime)
-                    .neonShadow(.electricLime)
-                
-                Spacer()
-            }
-            .onAppear {
-                isVisible = true
-            }
-            
-            Map(position: $cameraPosition) {
+            Map(position: $cameraPosition) { // harita
                 UserAnnotation()
                 if tracker.locations.count > 1 {
                     MapPolyline(coordinates: tracker.locations.map(\.coordinate))
@@ -219,27 +291,35 @@ struct CardioView: View {
             .frame(height: 300)
             .clipShape(RoundedRectangle(cornerRadius: 15))
             
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                VStack(spacing: 8) {
+            TimelineView(.periodic(from: .now, by: 1)) { _ in //statlar
+                VStack(spacing: 8) { // hedef belirlenmiş stat
                     infoCards[0]
-                    ProgressBar(goal: CardioGoal(type: selectedTargetType, value: targetValue), current: tracker.currentValue)
+                    if selectedGoalType != .free {
+                        ProgressBar(goal: CardioGoal(type: selectedGoalType, value: goalValue), current: tracker.currentValue(for: user))
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
                 .card()
                 
-                HStack(spacing: 12){
+                HStack(spacing: 12){ // kalan statlar
                     infoCards[1]
                     InfoCard(title: "Pace", icon: "stopwatch", value: paceString, color: .iceBlue)
                 }
                 HStack(spacing: 12){
                     InfoCard(title: "Heart Rate", icon: "heart.fill", value: "heartrate", color: .red.mix(with: .white, by: 0.5))
-                    InfoCard(title: "Calories", icon: "flame", value: "calorie", color: .electricLime)
-                    //TODO: Kalp atışı ve kalori özelliği eklenince burayı güncelle
+                    infoCards[2]
+                    //TODO: Kalp atışı özelliği eklenince burayı güncelle
+                }
+                
+                HStack(spacing: 12) {
+                    InfoCard(title: "Last Lap", icon: "", value: tracker.laps.last.map { timeString($0.pace) } ?? "--:-- /km", color: .neonBlue)
+                    InfoCard(title: "Pace Diff", icon: "", value: paceDifString, color: isFaster ? .electricLime : .red)
+                    
                 }
             }
             
-            HStack {
+            HStack(spacing: 20) { //pause ve end butonları
                 Button(isPaused ? "Resume": "Pause") {
                     if isPaused { tracker.resume() } else { tracker.pause() }
                 }
@@ -257,6 +337,7 @@ struct CardioView: View {
                         tracker.end()
                         if let session = tracker.makeSession() {
                             modelContext.insert(session)
+                            endedSession = session
                         }
                         withAnimation {
                             stage = .ended
@@ -268,54 +349,81 @@ struct CardioView: View {
         }
     }
     
-    @ViewBuilder
-    private func endedMenu() -> some View {
-        VStack {
-            
-        }
-    }
-    
 }
 
 //TODO: use stitch for ui design
 
 #Preview {
     CardioView()
+        .environment(User.preview)
 }
 
-struct InfoCard: View {
-    var title: String
-    var icon: String
-    var value: String
-    var color: Color
-    var isMain = false
-    var targetText: String?
-    var body: some View {
-        VStack(alignment: isMain ? .center : .leading) {
-            HStack {
-                Text("\(title): ")
-                    .font(.plusJakartaSans(size: 14))
-                    .foregroundStyle(.white)
-                if !isMain {
-                    Spacer()
-                    Image(systemName: icon)
-                        .foregroundStyle(color)
+extension View {
+    func customToolbar(title: String) -> some View {
+        self
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(title)
+                        .font(.plusJakartaSansBold(size: 24))
+                        .foregroundStyle(.electricLime)
                 }
             }
-            Text(value)
-                .font(.spaceGroteskBold(size: isMain ? 36 : 24))
-                .foregroundStyle(color)
-        }
-        .frame(maxWidth: .infinity, alignment: isMain ? .center : .leading)
-        .frame(height: 46)
-        .padding()
-        .card()
+            .toolbarColorScheme(.dark, for: .navigationBar)
+
     }
 }
 
-struct TargetOption: View {
-    @Binding var targetValue: Double
-    var type: TargetType
+
+
+struct LapRow: View {
+    let lap: Lap
+    var isFastest = false
+    
+    private var accent: Color { isFastest ? .neonBlue : .electricLime }
+    
+    private var paceString: String {
+        let km = lap.distanceMeters / 1000
+        guard km > 0 else { return "--" }
+        let pace = Int(lap.duration / km)
+        return String(format: "%d:%02d /km", pace / 60, pace % 60)
+    }
+    
+    var body: some View {
+        HStack {
+            Text("\(lap.index)")
+                .font(.spaceGroteskBold(size: 16))
+                .foregroundStyle(.coldBlack)
+                .frame(width: 32, height: 32)
+                .background(accent)
+                .clipShape(Circle())
+                .neonShadow(isFastest ? .neonBlue : .clear)
+            Text(Measurement(value: lap.distanceMeters, unit: UnitLength.meters)
+                .formatted(.measurement(width: .abbreviated, usage: .road)))
+            .font(.plusJakartaSans(size: 14))
+            .foregroundStyle(.white)
+            if isFastest {
+                Label("Fastest", systemImage: "bolt.fill")
+                    .font(.spaceGroteskBold(size: 12))
+                    .foregroundStyle(.coldBlack)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.neonBlue)
+                    .clipShape(Capsule())
+            }
+            Spacer()
+            Text(paceString)
+                .font(.spaceGroteskBold(size: 16))
+                .foregroundStyle(isFastest ? .neonBlue : .iceBlue)
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+
+
+struct GoalOption: View {
+    @Binding var goalValue: Double
+    var type: GoalType
     var isSelected: Bool
     var body: some View {
         VStack {
@@ -327,10 +435,9 @@ struct TargetOption: View {
                         .coldBlack.mix(with: .white, by: 0.2)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 15))
-                VStack {
-                    Text(type.name)
-                        .font(.plusJakartaSans(size: 14))
-                }
+                Text(type.name)
+                    .font(.plusJakartaSans(size: 14))
+                
             }
             .foregroundStyle(isSelected ? .electricLime : .white)
             .frame(maxWidth: .infinity , alignment: .leading)
@@ -339,6 +446,7 @@ struct TargetOption: View {
         .padding(2)
         .background(isSelected ? .electricLime : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 15))
+        .shadow(color: isSelected ? .electricLime : .clear ,radius: 10)
     }
 }
 
@@ -365,10 +473,28 @@ struct PickerElement: View {
 struct ProgressBar: View {
     let goal: CardioGoal
     let current: Double
+    // Bitiş ekranında: yüzde %100'de kesilmez, aşılan miktar gösterilir
+    var showsOvershoot = false
     
-    var progress: Double {
+    var ratio: Double {
         guard goal.value > 0 else { return 0 }
-        return min(current / goal.value, 1)
+        return current / goal.value
+    }
+    var progress: Double { min(ratio, 1) }
+    var overshoot: Double { max(current - goal.value, 0) }
+    
+    var overshootString: String {
+        switch goal.type {
+        case .free:
+            return ""
+        case .distance: // km
+            return "+\(overshoot.formatted(.number.precision(.fractionLength(0...2)))) km"
+        case .duration: // dakika
+            let s = Int(overshoot * 60)
+            return String(format: "+%d:%02d min", s / 60, s % 60)
+        case .calories:
+            return "+\(Int(overshoot)) kcal"
+        }
     }
     
     var isGoalReached: Bool { progress >= 1}
@@ -390,7 +516,7 @@ struct ProgressBar: View {
                 .font(.spaceGrotesk(size: 14))
                 .foregroundStyle(.white)
             Spacer()
-            Text("\(progress.formatted(.percent.precision(.fractionLength(0))))")
+            Text("\((showsOvershoot ? ratio : progress).formatted(.percent.precision(.fractionLength(0))))")
                 .font(.spaceGrotesk(size: 14))
                 .foregroundStyle(.electricLime)
             
@@ -405,5 +531,14 @@ struct ProgressBar: View {
             }
         }
         .frame(height: 10)
+        if showsOvershoot && overshoot > 0 {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.right")
+                Text("\(overshootString) over goal")
+            }
+            .font(.spaceGroteskBold(size: 14))
+            .foregroundStyle(.electricLime)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 }

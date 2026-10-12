@@ -9,20 +9,19 @@ import SwiftUI
 import SwiftData
 
 struct EditProfileView: View {
-    @Query private var users: [User]
+    @Environment(User.self) private var user
 
     var body: some View {
         NavigationStack {
-            if let user = users.first {
-                ProfileForm(user: user)
-                    .navigationTitle("Profil")
-            }
+            ProfileForm(user: user)
+                .navigationTitle("Profil")
         }
     }
 }
 
 #Preview {
     EditProfileView()
+        .environment(User.preview)
 }
 
 private struct ProfileForm: View {
