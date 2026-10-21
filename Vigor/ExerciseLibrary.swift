@@ -1,39 +1,29 @@
 //
-//  ExerciseSeeder.swift
+//  ExerciseLibrary.swift
 //  Vigor
 //
 //  Created by Alp Rüzgar on 4.10.2026.
 //
 
 import Foundation
-import SwiftData
 
-enum ExerciseSeeder {
-    static func seedIfNeeded(_ context: ModelContext) {
-        // Sadece veritabanında henüz olmayan egzersizleri ekle,
-        // böylece kütüphaneye yeni egzersiz eklendiğinde mevcut kullanıcılar da alır
-        let existing = (try? context.fetch(FetchDescriptor<ExerciseType>())) ?? []
-        let existingByName = Dictionary(existing.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+/// Egzersiz kütüphanesi veritabanında saklanmaz; kayıtlar egzersizi adıyla referanslar
+enum ExerciseLibrary {
+    /// Ada göre sıralı tüm egzersizler
+    static let all: [ExerciseType] = definitions
+        .map { ExerciseType(name: $0.name, targetMuscles: $0.muscles, kind: $0.kind, difficulty: $0.difficulty) }
+        .sorted { $0.name < $1.name }
 
-        for item in library {
-            if let exercise = existingByName[item.name] {
-                // Mevcut kayıtların zorluk seviyesini kütüphaneyle senkronize et
-                if exercise.difficulty != item.difficulty {
-                    exercise.difficulty = item.difficulty
-                }
-            } else {
-                context.insert(ExerciseType(name: item.name,
-                                            targetMuscles: item.muscles,
-                                            kind: item.kind,
-                                            difficulty: item.difficulty))
-            }
-        }
+    private static let byName = Dictionary(all.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+
+    static func exercise(named name: String) -> ExerciseType? {
+        byName[name]
     }
 
     // Zorluk seviyeleri free-exercise-db'deki "level" alanından alındı:
     // https://github.com/yuhonas/free-exercise-db
     // beginner → easy, intermediate → medium, expert → hard
-    private static let library: [(name: String, muscles: [TargetMuscle], kind: ExerciseKind, difficulty: Difficulty)] = [
+    private static let definitions: [(name: String, muscles: [TargetMuscle], kind: ExerciseKind, difficulty: Difficulty)] = [
         // Göğüs
         ("Bench Press", [.chest, .triceps], .repetition, .easy),
         ("Incline Bench Press", [.chest, .shoulders, .triceps], .repetition, .easy),

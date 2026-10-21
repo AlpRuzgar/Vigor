@@ -9,8 +9,21 @@ import SwiftUI
 import SwiftData
 
 struct WorkoutDetailView: View {
+    @Environment(TemplateManager.self) private var templateManager
     let workout: Workout
     var showsToolbar: Bool = true
+    @State private var isNamingTemplate = false
+    @State private var templateName = ""
+    @State private var isSavedAsTemplate = false
+
+    // Şablon için önerilen isim: egzersiz sırasına göre ilk iki hedef kas (ör. "Chest · Triceps")
+    private var suggestedTemplateName: String {
+        var seen = Set<TargetMuscle>()
+        let muscles = sortedEntries
+            .flatMap { $0.exercise?.targetMuscles ?? [] }
+            .filter { seen.insert($0).inserted }
+        return muscles.isEmpty ? "My Workout" : muscles.prefix(2).map { $0.displayName }.joined(separator: " · ")
+    }
 
     private var sortedEntries: [WorkoutEntry] {
         workout.entries.sorted { $0.orderIndex < $1.orderIndex }
@@ -53,8 +66,29 @@ struct WorkoutDetailView: View {
                     .font(.plusJakartaSansBold(size: 32))
                     .neonShadow(.electricLime)
                 Spacer()
+                Button {
+                    templateName = suggestedTemplateName
+                    isNamingTemplate = true
+                } label: {
+                    Image(systemName: isSavedAsTemplate ? "star.fill" : "star")
+                        .font(.system(size: 20))
+                        .padding(10)
+                        .background(Color.regularGray)
+                        .clipShape(Circle())
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                // Aynı ekrandan tekrar tekrar kopya oluşturulmasın
+                .disabled(isSavedAsTemplate || sortedEntries.isEmpty)
+                .accessibilityLabel(isSavedAsTemplate ? "Saved as template" : "Save as template")
             }
             .foregroundStyle(.electricLime)
+            .alert("Save as Template", isPresented: $isNamingTemplate) {
+                TextField("Template name", text: $templateName)
+                Button("Cancel", role: .cancel) { }
+                Button("Save") { saveTemplate() }
+            } message: {
+                Text("Quick start this workout later from the Workout tab.")
+            }
 
             Text(workout.startDate.formatted(date: .abbreviated, time: .shortened))
                 .font(.spaceGrotesk(size: 14))
@@ -84,6 +118,12 @@ struct WorkoutDetailView: View {
             }
         }
         .modifier(WorkoutDetailToolbarModifier(isEnabled: showsToolbar))
+    }
+
+    private func saveTemplate() {
+        let name = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        templateManager.createTemplateFromWorkout(workout, name: name.isEmpty ? suggestedTemplateName : name)
+        withAnimation { isSavedAsTemplate = true }
     }
 }
 
@@ -116,7 +156,7 @@ struct WorkoutEntrySummary: View {
                     Text(entry.exercise?.name ?? "")
                         .font(.plusJakartaSansBold(size: 18))
                         .foregroundStyle(.white)
-                    Text(entry.exercise?.targetMuscles.map { $0.rawValue.capitalized }.joined(separator: ", ") ?? "")
+                    Text(entry.exercise?.targetMuscles.map(\.displayName).joined(separator: ", ") ?? "")
                         .font(.spaceGrotesk(size: 13))
                         .foregroundStyle(.neonBlue)
                 }
@@ -203,7 +243,8 @@ private struct WorkoutDetailToolbarModifier: ViewModifier {
 }
 
 #Preview {
-    let container = try! ModelContainer(for: ExerciseType.self, Workout.self, WorkoutEntry.self, ExerciseSet.self,
+    let container = try! ModelContainer(for: Workout.self, WorkoutEntry.self, ExerciseSet.self,
+                                        WorkoutTemplate.self, TemplateEntry.self, TemplateSet.self,
                                         configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     let bench = ExerciseType(name: "Bench Press", targetMuscles: [.chest, .triceps], difficulty: .hard)
     let plank = ExerciseType(name: "Plank", targetMuscles: [.abs], kind: .timed, difficulty: .easy)
@@ -223,5 +264,6 @@ private struct WorkoutDetailToolbarModifier: ViewModifier {
             .padding()
     }
     .background(.coldBlack)
+    .environment(TemplateManager(context: container.mainContext))
     .modelContainer(container)
 }

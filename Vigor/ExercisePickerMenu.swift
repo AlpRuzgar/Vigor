@@ -10,7 +10,7 @@ import SwiftData
 
 struct ExercisePickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \ExerciseType.name) private var exercises: [ExerciseType]
+    private let exercises = ExerciseLibrary.all
     @State private var searchText = ""
     // Seçim sırasını korumak için dizi kullanılıyor
     @State private var selected: [ExerciseType] = []
@@ -96,7 +96,7 @@ struct ExercisePickerRow: View {
                 Text(exercise.name)
                     .font(.plusJakartaSansBold(size: 16))
                     .foregroundStyle(.white)
-                Text(exercise.targetMuscles.map { $0.rawValue.capitalized }.joined(separator: ", "))
+                Text(exercise.targetMuscles.map(\.displayName).joined(separator: ", "))
                     .font(.spaceGrotesk(size: 13))
                     .foregroundStyle(.neonBlue)
                 DifficultyBadge(difficulty: exercise.difficulty)
@@ -158,9 +158,5 @@ struct DifficultyBadge: View {
 }
 
 #Preview {
-    let container = try! ModelContainer(for: ExerciseType.self,
-                                        configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-    ExerciseSeeder.seedIfNeeded(container.mainContext)
-    return ExercisePickerView { _ in }
-        .modelContainer(container)
+    ExercisePickerView { _ in }
 }

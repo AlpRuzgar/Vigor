@@ -390,6 +390,14 @@ struct CardioView: View {
                         if let session = tracker.makeSession() {
                             modelContext.insert(session)
                             endedSession = session
+                            switch selectedActivity {
+                            case .running:
+                                user.runDistance += session.distanceMeters
+                            case .walking:
+                                user.walkDistance += session.distanceMeters
+                            case .cycling:
+                                user.cycleDistance += session.distanceMeters
+                            }
                         }
                         withAnimation {
                             stage = .ended

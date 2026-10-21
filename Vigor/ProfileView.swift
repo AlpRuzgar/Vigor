@@ -26,7 +26,7 @@ struct ProfileView: View {
             .customToolbar(title: "Profile")
         }
     }
-
+    
     @ViewBuilder
     private func profileDetailBar() -> some View {
         HStack {
@@ -53,12 +53,46 @@ struct ProfileView: View {
         .frame(height: 120)
         .card()
     }
+
     
     @ViewBuilder
     private func allTimeStatsCard() -> some View {
-        
+        VStack {
+            cardioStats()
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .card(brightness: 0.1)
+    }
+    
+    @ViewBuilder
+    private func cardioStats() -> some View {
+        HStack {
+            DistanceStatCard(icon: "figure.walk", value: user.walkDistance/1000, color: Color.neonBlue)
+            DistanceStatCard(icon: "figure.run", value: user.runDistance/1000, color: Color.plasmaOrange)
+            DistanceStatCard(icon: "figure.outdoor.cycle", value: user.cycleDistance/1000, color: Color.neonPurple)
+        }
     }
 }
+
+struct DistanceStatCard: View {
+    var icon: String
+    var value: Double
+    var color: Color
+    var body: some View {
+        VStack {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundStyle(color)
+                .padding(8)
+            Text("\(value.formatted(.number.precision(.fractionLength(1)))) km")
+                .foregroundStyle(.white)
+                .font(.spaceGroteskBold(size: 18))
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 #Preview {
     ProfileView()
         .environment(User.preview)

@@ -28,7 +28,6 @@ struct MainView: View {
                 ProfileSetupView()
             }
         }
-        .task { ExerciseSeeder.seedIfNeeded(modelContext) }
     }
 }
 

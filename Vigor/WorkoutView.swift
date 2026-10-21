@@ -10,6 +10,7 @@ import SwiftData
 
 struct WorkoutView: View {
     @Environment(WorkoutTracker.self) private var tracker
+    @Environment(User.self) private var user
     @State private var stage: Stage = .idle
     @State private var isShowingExercisesSheet: Bool = false
     @State private var saveErrorMessage: String?
@@ -20,6 +21,8 @@ struct WorkoutView: View {
     @State private var cardWidth: CGFloat = 0
     @State private var incomingEdge: Edge = .trailing
     @State private var endedWorkout: Workout?
+    // Geri sayım bitince bu şablonla başlatılır; nil ise boş antrenman başlar
+    @State private var pendingTemplate: WorkoutTemplate?
     private var shownEntry: WorkoutEntry? {
         tracker.sortedEntries.indices.contains(shownEntryIndex) ? tracker.sortedEntries[shownEntryIndex] : nil
     }
@@ -73,12 +76,18 @@ struct WorkoutView: View {
             if isCountingDown {
                 CountdownView {
                     // Süre geri sayım bittikten sonra başlar
-                    tracker.start()
+                    if let pendingTemplate {
+                        tracker.startFromTemplate(pendingTemplate)
+                    } else {
+                        tracker.start()
+                    }
+                    pendingTemplate = nil
                     withAnimation {
                         isCountingDown = false
                         stage = .active
                     }
                 } onCancel: {
+                    pendingTemplate = nil
                     withAnimation { isCountingDown = false }
                 }
                 .transition(.opacity)
@@ -88,12 +97,21 @@ struct WorkoutView: View {
     
     @ViewBuilder
     func startMenu() -> some View {
-        Button("Start Workout") {
-            withAnimation {
-                isCountingDown = true
+        VStack(spacing: 24) {
+            Button("Start Workout") {
+                withAnimation {
+                    isCountingDown = true
+                }
+            }
+            .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
+
+            TemplateListView { template in
+                pendingTemplate = template
+                withAnimation {
+                    isCountingDown = true
+                }
             }
         }
-        .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
     }
     
     @ViewBuilder
@@ -404,7 +422,7 @@ struct WorkoutEntryCard: View {
                     Text(entry.exercise?.name ?? "")
                         .font(.plusJakartaSansBold(size: 22))
                         .foregroundStyle(.white)
-                    Text(entry.exercise?.targetMuscles.map { $0.rawValue.capitalized }.joined(separator: ", ") ?? "")
+                    Text(entry.exercise?.targetMuscles.map(\.displayName).joined(separator: ", ") ?? "")
                         .font(.spaceGrotesk(size: 16))
                         .foregroundStyle(.white)
                 }
@@ -598,11 +616,12 @@ struct SetRow: View {
 }
 
 #Preview {
-    let container = try! ModelContainer(for: ExerciseType.self, Workout.self, WorkoutEntry.self, ExerciseSet.self,
+    let container = try! ModelContainer(for: Workout.self, WorkoutEntry.self, ExerciseSet.self,
+                                        WorkoutTemplate.self, TemplateEntry.self, TemplateSet.self,
                                         configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-    ExerciseSeeder.seedIfNeeded(container.mainContext)
     return WorkoutView()
         .environment(WorkoutTracker(context: container.mainContext))
+        .environment(TemplateManager(context: container.mainContext))
         .modelContainer(container)
 }
 // TEMP: gradient comparison

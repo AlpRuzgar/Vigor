@@ -24,6 +24,8 @@ enum Difficulty: String, Codable, CaseIterable {
 enum TargetMuscle: String, Codable, CaseIterable {
     case chest, back, shoulders, biceps, triceps, forearms
     case abs, glutes, quads, hamstrings, calves
+
+    var displayName: String { rawValue.capitalized }
 }
 
 enum ExerciseKind: String, Codable {
@@ -135,22 +137,15 @@ struct CardioGoal {
     var value: Double
 }
 
-// Kütüphanedeki egzersiz tanımı
-@Model
-final class ExerciseType {
-    var name: String
-    var targetMuscles: [TargetMuscle]
-    var kind: ExerciseKind
-    // Migrasyon sırasında eski kayıtlarda bu sütun NULL kalıyor (varsayılan değer uygulanmıyor),
-    // bu yüzden optional saklanıyor ve okurken .medium'a düşülüyor
-    @Attribute(originalName: "difficulty")
-    private var storedDifficulty: Difficulty?
+// Kütüphanedeki egzersiz tanımı; veritabanında saklanmaz, ExerciseLibrary'den gelir
+struct ExerciseType: Hashable, Identifiable {
+    let name: String
+    let targetMuscles: [TargetMuscle]
+    let kind: ExerciseKind
+    let difficulty: Difficulty
 
-    var difficulty: Difficulty {
-        get { storedDifficulty ?? .medium }
-        set { storedDifficulty = newValue }
-    }
-    
+    var id: String { name }
+
     init(name: String, targetMuscles: [TargetMuscle], kind: ExerciseKind = .repetition, difficulty: Difficulty = .medium) {
         self.name = name
         self.targetMuscles = targetMuscles
@@ -175,34 +170,72 @@ final class Workout {
     }
 }
 
-//@Model
-//final class WorkoutTemplate {
-//    var name: String?
-//    var createdAt: Date?
-//    var lastUsed: Date?
-//    var entries: [WorkoutEntry] = []
-//    
-//    init(name: String? = nil, createdAt: Date? = nil, lastUsed: Date? = nil, entries: [WorkoutEntry]) {
-//        self.name = name
-//        self.createdAt = createdAt
-//        self.lastUsed = lastUsed
-//        self.entries = entries
-//    }
-//}
+// Favori antrenman şablonu; geçmiş antrenmanlardan bağımsız, kendi egzersiz ve set kopyalarını tutar
+@Model
+final class WorkoutTemplate {
+    var name: String
+    var createdAt: Date
+    var lastUsed: Date?
+
+    @Relationship(deleteRule: .cascade, inverse: \TemplateEntry.template)
+    var entries: [TemplateEntry] = []
+
+    init(name: String, createdAt: Date = .now) {
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+
+// Şablondaki bir egzersiz
+@Model
+final class TemplateEntry {
+    var orderIndex: Int
+    var template: WorkoutTemplate?
+    // Egzersiz kütüphanede adıyla aranır
+    var exerciseName: String = ""
+    var exercise: ExerciseType? { ExerciseLibrary.exercise(named: exerciseName) }
+
+    @Relationship(deleteRule: .cascade, inverse: \TemplateSet.entry)
+    var sets: [TemplateSet] = []
+
+    init(orderIndex: Int, exercise: ExerciseType?) {
+        self.orderIndex = orderIndex
+        self.exerciseName = exercise?.name ?? ""
+    }
+}
+
+// Şablondaki bir set
+@Model
+final class TemplateSet {
+    var orderIndex: Int
+    var reps: Int?
+    var durationSeconds: TimeInterval?
+    var weightKg: Double = 0.0
+    var entry: TemplateEntry?
+
+    init(orderIndex: Int, reps: Int?, durationSeconds: TimeInterval?, weightKg: Double) {
+        self.orderIndex = orderIndex
+        self.reps = reps
+        self.durationSeconds = durationSeconds
+        self.weightKg = weightKg
+    }
+}
 
 // Antrenmandaki bir egzersiz kaydı
 @Model
 final class WorkoutEntry {
     var orderIndex: Int
     var workout: Workout?
-    var exercise: ExerciseType?
+    // Egzersiz kütüphanede adıyla aranır
+    var exerciseName: String = ""
+    var exercise: ExerciseType? { ExerciseLibrary.exercise(named: exerciseName) }
     
     @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.entry)
     var sets: [ExerciseSet] = []
 
     init(orderIndex: Int, exercise: ExerciseType) {
         self.orderIndex = orderIndex
-        self.exercise = exercise
+        self.exerciseName = exercise.name
         // İlk set egzersizin türüne göre oluşturulur
         self.sets = [ExerciseSet(orderIndex: 0, kind: exercise.kind)]
     }
@@ -275,5 +308,5 @@ struct Lap: Codable, Hashable {
     var index: Int
     var distanceMeters: Double
     var duration: TimeInterval
-    var pace: TimeInterval { (duration / 60) / (distanceMeters * 1000) }
+    var pace: TimeInterval { (duration / 60) / (distanceMeters / 1000) } // dk/km
 }

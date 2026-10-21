@@ -50,6 +50,33 @@ final class WorkoutTracker {
         workout = new
     }
     
+    /// Şablondaki egzersiz ve setlerin kopyalarıyla yeni antrenman başlatır; şablonun kendisi değişmez
+    func startFromTemplate(_ temp: WorkoutTemplate) {
+        guard workout == nil else { return }
+        let new = Workout()
+        context.insert(new)
+        for templateEntry in temp.entries.sorted(by: { $0.orderIndex < $1.orderIndex }) {
+            // Kütüphaneden silinmiş egzersizler atlanır
+            guard let exercise = templateEntry.exercise else { continue }
+            let entry = WorkoutEntry(orderIndex: new.entries.count, exercise: exercise)
+            let templateSets = templateEntry.sets.sorted { $0.orderIndex < $1.orderIndex }
+            if !templateSets.isEmpty {
+                // init'in oluşturduğu varsayılan set, şablondaki setlerle değiştirilir
+                entry.sets = templateSets.enumerated().map { i, templateSet in
+                    let set = ExerciseSet(orderIndex: i, kind: exercise.kind, weightKg: templateSet.weightKg)
+                    // Egzersiz türü şablondan sonra değiştiyse kullanılmayan alan nil kalır
+                    if set.reps != nil { set.reps = templateSet.reps ?? set.reps }
+                    if set.durationSeconds != nil { set.durationSeconds = templateSet.durationSeconds ?? set.durationSeconds }
+                    return set
+                }
+            }
+            new.entries.append(entry)
+        }
+        temp.lastUsed = .now
+        workout = new
+    }
+
+    
     /// Yarım kalmış antrenmanı geri yükler
     func restoreUnfinished() {
         var descriptor = FetchDescriptor<Workout>(predicate: #Predicate { $0.endDate == nil })
@@ -85,6 +112,7 @@ final class WorkoutTracker {
             throw error
         }
         self.workout = nil
+        
     }
 
     /// Egzersiz eklenmemiş antrenmanı kaydetmeden siler (otomatik kayıt yapılmış olabileceği için context'ten de kaldırılır)
@@ -135,18 +163,4 @@ final class WorkoutTracker {
             s.orderIndex = i
         }
     }
-    
-//    func createTemplate(_ name: String, from workout: Workout) {
-//        let temp = WorkoutTemplate(name: name, createdAt: .now, entries: workout.entries)
-//        context.insert(temp)
-//    }
-//    
-//    func startFromTemplate(_ temp: WorkoutTemplate) {
-//        var new = Workout()
-//        for entry in temp.entries {
-//            new.entries.append(entry)
-//        }
-//        context.insert(new)
-//        workout = new
-//    }
 }

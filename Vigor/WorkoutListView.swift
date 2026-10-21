@@ -118,7 +118,7 @@ struct WorkoutRow: View {
             if !muscles.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(muscles.prefix(3), id: \.self) { muscle in
-                        MuscleTag(text: muscle.rawValue.capitalized)
+                        MuscleTag(text: muscle.displayName)
                     }
                     if muscles.count > 3 {
                         MuscleTag(text: "+\(muscles.count - 3)")

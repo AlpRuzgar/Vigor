@@ -45,9 +45,13 @@ final class User {
     var weightKg: Double
     var heightCm: Double
     var joinedAt: Date
-
     var weight: Measurement<UnitMass> { .init(value: weightKg, unit: .kilograms) }
     var height: Measurement<UnitLength> { .init(value: heightCm, unit: .centimeters) }
+    
+    var walkDistance: Double = 0
+    var cycleDistance: Double = 0
+    var runDistance: Double = 0
+    var cardioDistance: Double { walkDistance + cycleDistance + runDistance }
 
     init(avatar: Avatar, name: String, bday: Date, sex: Sex, weightKg: Double, heightCm: Double, joinedAt: Date = .now) {
         self.avatar = avatar
