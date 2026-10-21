@@ -14,6 +14,16 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
     
+    /// ScrollView içindeki satırlarda kaydırma aksiyonlarını koordine eder (iOS 27+; öncesinde etkisiz)
+    @ViewBuilder
+    func swipeActionsContainerIfAvailable() -> some View {
+        if #available(iOS 27.0, *) {
+            self.swipeActionsContainer()
+        } else {
+            self
+        }
+    }
+
     func neonShadow(_ color: Color) -> some View {
         self
             .shadow(color: color, radius: 4)
@@ -24,13 +34,14 @@ extension View {
 struct NeonButtonStyle: ButtonStyle {
     var foregroundColor: Color
     var backgroundColor: Color
+    var fontSize: CGFloat
     
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding()
             .frame(maxWidth: .infinity)
             .foregroundStyle(foregroundColor)
-            .font(.spaceGroteskBold(size: 20))
+            .font(.spaceGroteskBold(size: fontSize))
             .background(backgroundColor)
             .clipShape(Capsule())
             .neonShadow(backgroundColor)
@@ -38,12 +49,12 @@ struct NeonButtonStyle: ButtonStyle {
 }
 
 extension ButtonStyle where Self == NeonButtonStyle {
-    static func neon(foregroundColor: Color, backgroundColor: Color) -> NeonButtonStyle {
-        NeonButtonStyle(foregroundColor: foregroundColor, backgroundColor: backgroundColor)
+    static func neon(foregroundColor: Color, backgroundColor: Color, fontSize: CGFloat = 20) -> NeonButtonStyle {
+        NeonButtonStyle(foregroundColor: foregroundColor, backgroundColor: backgroundColor, fontSize: fontSize)
     }
 }
 
-struct CustomStepper: View {
+struct GoalStepper: View {
     var type: GoalType
     var isFree: Bool {
         type == .free
@@ -52,7 +63,7 @@ struct CustomStepper: View {
     var body: some View {
         VStack (spacing: 20) {
             HStack {
-                StepperButton(symbol: "minus", foregroundColor: .white, backgroundColor: .coldBlack.mix(with: .white, by: 0.2)) {
+                StepperButton(symbol: "minus", foregroundColor: .white, backgroundColor: Color.regularGray) {
                     value -= type.step
                 }
                 .disabled(value <= type.range.lowerBound || isFree)
@@ -65,15 +76,14 @@ struct CustomStepper: View {
                     .font(.spaceGrotesk(size: 18))
                     .foregroundStyle(.electricLime)
                 Spacer()
-                StepperButton(symbol: "plus") {
+                StepperButton(symbol: "plus", foregroundColor: .white, backgroundColor: Color.regularGray) {
                     value += type.step
                 }
                 .disabled(value >= type.range.upperBound || isFree)
             }
-            .background(.coldBlack.mix(with: .white, by: 0.1))
+            .background(Color.darkGray)
             .clipShape(Capsule())
         }
-
     }
 }
 
@@ -123,4 +133,10 @@ struct InfoCard: View {
         .padding()
         .card()
     }
+}
+
+extension Color {
+    static let darkGray = Color.coldBlack.mix(with: .white, by: 0.1)
+    static let regularGray = Color.coldBlack.mix(with: .white, by: 0.2)
+    static let lightGray = Color.coldBlack.mix(with: .white, by: 0.3)
 }

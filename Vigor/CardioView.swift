@@ -24,15 +24,25 @@ struct CardioView: View {
     @State private var showEndConfirmation = false
     @State private var tracker = CardioTracker()
     @State private var endedSession: CardioSession?
-    
+    @State private var isCountingDown = false
+
     @State private var selectedActivity: CardioActivity = .running
     @State private var selectedGoalType: GoalType = .free
     @State private var goalValue: Double = 5
-    @State private var cardOrder: [Int] = [0, 1, 2]
+    
+    @State private var primaryColor: Color = .neonBlue
+    // Hedef kartı en üstte; her seferinde hedef tipinden hesaplanır, böylece önceki seanstan kalan sıra taşınmaz
+    private var cardOrder: [Int] {
+        switch selectedGoalType {
+        case .free, .distance: [0, 1, 2]
+        case .duration: [1, 0, 2]
+        case .calories: [2, 0, 1]
+        }
+    }
     
     var infoCards: [InfoCard] {
         let cards = [
-            InfoCard(title: "Distance", icon: "ruler", value: distanceString, color: .electricLime),
+            InfoCard(title: "Distance", icon: "ruler", value: distanceString, color: primaryColor),
             InfoCard(title: "Time", icon: "timer", value: elapsedString, color: .white),
             InfoCard(title: "Calories", icon: "flame.fill", value: caloriesString, color: .electricLime)
         ]
@@ -145,7 +155,11 @@ struct CardioView: View {
                                 activeMenu()
                             case .ended:
                                 if let endedSession {
-                                    CardioDetailsView(cardioSession: endedSession, showsToolbar: false)
+                                    VStack(spacing: 20) {
+                                        CardioDetailsView(cardioSession: endedSession, showsToolbar: false)
+                                        Button("Go Back") { goBack() }
+                                            .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: primaryColor))
+                                    }
                                 } else {
                                     unrecordedSessionNotice()
                                 }
@@ -156,7 +170,17 @@ struct CardioView: View {
                     .padding()
                     .id("top")
                 }
-                .background(.coldBlack)
+                .background {
+                    if stage == .active {
+                        ActiveBackground(primaryColor: primaryColor)
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                    } else {
+                        Color.coldBlack
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                    }
+                }
                 .navigationBarTitleDisplayMode(.inline)
                 .customToolbar(title: title)
             }
@@ -167,7 +191,17 @@ struct CardioView: View {
             }
         }
         .scrollClipDisabled()
-        
+        .overlay {
+            if isCountingDown {
+                CountdownView {
+                    startCardio()
+                } onCancel: {
+                    withAnimation { isCountingDown = false }
+                }
+                .transition(.opacity)
+            }
+        }
+
         .onAppear {
             if tracker.lm.authorizationStatus == .notDetermined {
                 tracker.lm.requestAuthorization()
@@ -177,6 +211,15 @@ struct CardioView: View {
     }
     
     
+    // Geri sayım bitince çağrılır: takip (süre + GPS) ancak şimdi başlar
+    private func startCardio() {
+        tracker.start(activity: selectedActivity, cardioGoal: CardioGoal(type: selectedGoalType, value: goalValue))
+        withAnimation(.spring) {
+            isCountingDown = false
+            stage = .active
+        }
+    }
+
     @ViewBuilder
     private func startingMenu() -> some View {
         VStack (spacing: 32) {
@@ -193,6 +236,7 @@ struct CardioView: View {
                             .onTapGesture {
                                 withAnimation {
                                     selectedActivity = activity
+                                    primaryColor = activity.primaryColor
                                 }
                             }
                     }
@@ -207,7 +251,7 @@ struct CardioView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]){
                     ForEach(GoalType.allCases, id: \.self) { type in
-                        GoalOption(goalValue: $goalValue ,type: type, isSelected: selectedGoalType == type)
+                        GoalOption(goalValue: $goalValue ,type: type, isSelected: selectedGoalType == type, primaryColor: primaryColor)
                             .onTapGesture {
                                 withAnimation {
                                     selectedGoalType = type
@@ -222,14 +266,14 @@ struct CardioView: View {
             VStack {
                 HStack {
                     Image(systemName: "slider.horizontal.3")
-                        .foregroundStyle(.electricLime)
+                        .foregroundStyle(primaryColor)
                     Text("Goal Type: \(selectedGoalType.name)")
                         .font(.plusJakartaSans(size: 16))
                         .foregroundStyle(.white)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
-                CustomStepper(type: selectedGoalType, value: $goalValue)
+                GoalStepper(type: selectedGoalType, value: $goalValue)
             }
             
             
@@ -245,16 +289,11 @@ struct CardioView: View {
             }
 
             Button("Start Cardio") {
-                tracker.start(activity: selectedActivity, cardioGoal: CardioGoal(type: selectedGoalType, value: goalValue))
-                if selectedGoalType != .free {
-                    let removed = cardOrder.remove(at: selectedGoalType.arrayIndex)
-                    cardOrder.insert(removed, at: 0)
-                }
-                withAnimation(.spring) {
-                    stage = .active
+                withAnimation {
+                    isCountingDown = true
                 }
             }
-            .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
+            .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: primaryColor))
             .disabled(isLocationUnavailable)
         }
     }
@@ -264,7 +303,7 @@ struct CardioView: View {
         VStack(spacing: 16) {
             Image(systemName: "location.slash.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(.electricLime)
+                .foregroundStyle(primaryColor)
             Text("Session Not Recorded")
                 .font(.plusJakartaSansBold(size: 20))
                 .foregroundStyle(.white)
@@ -272,9 +311,22 @@ struct CardioView: View {
                 .font(.plusJakartaSans(size: 14))
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
+            Button("Go Back") { goBack() }
+                .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: primaryColor))
+                .padding(.top, 16)
         }
         .padding(.vertical, 40)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Özet ekranından başlangıç ekranına döner
+    private func goBack() {
+        // end() GPS'i durdurur; başlangıç ekranı konuma ihtiyaç duyduğu için yeniden başlatılır
+        tracker.lm.startUpdatingLocation()
+        withAnimation {
+            stage = .idle
+            endedSession = nil
+        }
     }
 
     @ViewBuilder
@@ -314,7 +366,7 @@ struct CardioView: View {
                 
                 HStack(spacing: 12) {
                     InfoCard(title: "Last Lap", icon: "", value: tracker.laps.last.map { timeString($0.pace) } ?? "--:-- /km", color: .neonBlue)
-                    InfoCard(title: "Pace Diff", icon: "", value: paceDifString, color: isFaster ? .electricLime : .red)
+                    InfoCard(title: "Pace Diff", icon: "", value: paceDifString, color: isFaster ? primaryColor : .red)
                     
                 }
             }
@@ -323,12 +375,12 @@ struct CardioView: View {
                 Button(isPaused ? "Resume": "Pause") {
                     if isPaused { tracker.resume() } else { tracker.pause() }
                 }
-                .buttonStyle(.neon(foregroundColor: isPaused ? .white:.red, backgroundColor: .coldBlack.mix(with: .white, by: 0.1)))
+                .buttonStyle(.neon(foregroundColor: isPaused ? .white:.red, backgroundColor: .darkGray))
                 
                 Button("End") {
                     showEndConfirmation = true
                 }
-                .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: .electricLime))
+                .buttonStyle(.neon(foregroundColor: .coldBlack, backgroundColor: primaryColor))
                 
                 .confirmationDialog("Koşuyu bitirmek istiyor musun?",
                                     isPresented: $showEndConfirmation,
@@ -425,6 +477,7 @@ struct GoalOption: View {
     @Binding var goalValue: Double
     var type: GoalType
     var isSelected: Bool
+    var primaryColor: Color
     var body: some View {
         VStack {
             HStack {
@@ -432,21 +485,21 @@ struct GoalOption: View {
                     .font(.system(size: 24))
                     .frame(width: 50, height: 50)
                     .background(
-                        .coldBlack.mix(with: .white, by: 0.2)
+                        Color.regularGray
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 15))
                 Text(type.name)
                     .font(.plusJakartaSans(size: 14))
                 
             }
-            .foregroundStyle(isSelected ? .electricLime : .white)
+            .foregroundStyle(isSelected ? primaryColor : .white)
             .frame(maxWidth: .infinity , alignment: .leading)
             .card(brightness: 0.14)
         }
         .padding(2)
-        .background(isSelected ? .electricLime : .clear)
+        .background(isSelected ? primaryColor : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 15))
-        .shadow(color: isSelected ? .electricLime : .clear ,radius: 10)
+        .shadow(color: isSelected ? primaryColor : .clear ,radius: 10)
     }
 }
 
@@ -465,7 +518,7 @@ struct PickerElement: View {
         .frame(height: 60)
         .foregroundStyle(isSelected ? .coldBlack : .white)
         .padding()
-        .background(isSelected ? .electricLime: .coldBlack.mix(with: .white, by: 0.1))
+        .background(isSelected ? activity.primaryColor : .darkGray)
         .clipShape(RoundedRectangle(cornerRadius: 15))
     }
 }

@@ -10,64 +10,135 @@ import SwiftData
 
 enum ExerciseSeeder {
     static func seedIfNeeded(_ context: ModelContext) {
-        // Veritabanında zaten egzersiz varsa hiçbir şey yapma
-        let count = (try? context.fetchCount(FetchDescriptor<ExerciseType>())) ?? 0
-        guard count == 0 else { return }
+        // Sadece veritabanında henüz olmayan egzersizleri ekle,
+        // böylece kütüphaneye yeni egzersiz eklendiğinde mevcut kullanıcılar da alır
+        let existing = (try? context.fetch(FetchDescriptor<ExerciseType>())) ?? []
+        let existingByName = Dictionary(existing.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
 
         for item in library {
-            context.insert(ExerciseType(name: item.name,
-                                        targetMuscles: item.muscles,
-                                        kind: item.kind))
+            if let exercise = existingByName[item.name] {
+                // Mevcut kayıtların zorluk seviyesini kütüphaneyle senkronize et
+                if exercise.difficulty != item.difficulty {
+                    exercise.difficulty = item.difficulty
+                }
+            } else {
+                context.insert(ExerciseType(name: item.name,
+                                            targetMuscles: item.muscles,
+                                            kind: item.kind,
+                                            difficulty: item.difficulty))
+            }
         }
     }
 
-    private static let library: [(name: String, muscles: [TargetMuscle], kind: ExerciseKind)] = [
+    // Zorluk seviyeleri free-exercise-db'deki "level" alanından alındı:
+    // https://github.com/yuhonas/free-exercise-db
+    // beginner → easy, intermediate → medium, expert → hard
+    private static let library: [(name: String, muscles: [TargetMuscle], kind: ExerciseKind, difficulty: Difficulty)] = [
         // Göğüs
-        ("Bench Press", [.chest, .triceps], .repetition),
-        ("Incline Dumbbell Press", [.chest, .shoulders], .repetition),
-        ("Chest Fly", [.chest], .repetition),
-        ("Push-Up", [.chest, .triceps], .repetition),
+        ("Bench Press", [.chest, .triceps], .repetition, .easy),
+        ("Incline Bench Press", [.chest, .shoulders, .triceps], .repetition, .easy),
+        ("Decline Bench Press", [.chest, .triceps], .repetition, .easy),
+        ("Incline Dumbbell Press", [.chest, .shoulders], .repetition, .easy),
+        ("Decline Dumbbell Press", [.chest], .repetition, .easy),
+        ("Dumbbell Bench Press", [.chest, .triceps], .repetition, .easy),
+        ("Chest Fly", [.chest], .repetition, .easy),
+        ("Incline Chest Fly", [.chest, .shoulders], .repetition, .easy),
+        ("Cable Crossover", [.chest], .repetition, .easy),
+        ("Pec Deck Machine", [.chest], .repetition, .easy),
+        ("Push-Up", [.chest, .triceps], .repetition, .easy),
+        ("Incline Push-Up", [.chest, .triceps], .repetition, .easy),
+        ("Smith Machine Bench Press", [.chest, .triceps], .repetition, .easy),
         // Sırt
-        ("Lat Pulldown", [.back, .biceps], .repetition),
-        ("Barbell Row", [.back], .repetition),
-        ("Seated Cable Row", [.back], .repetition),
-        ("Pull-Up", [.back, .biceps], .repetition),
-        ("Deadlift", [.back, .hamstrings, .glutes], .repetition),
+        ("Lat Pulldown", [.back, .biceps], .repetition, .easy),
+        ("Close-Grip Lat Pulldown", [.back, .biceps], .repetition, .easy),
+        ("Straight-Arm Pulldown", [.back], .repetition, .easy),
+        ("Barbell Row", [.back, .biceps], .repetition, .easy),
+        ("Pendlay Row", [.back, .biceps], .repetition, .medium), // DB'de yok, web kaynaklarına göre
+        ("T-Bar Row", [.back, .biceps], .repetition, .easy),
+        ("Seated Cable Row", [.back, .biceps], .repetition, .easy),
+        ("Single-Arm Dumbbell Row", [.back, .biceps], .repetition, .easy),
+        ("Chest-Supported Row", [.back, .biceps], .repetition, .easy),
+        ("Pull-Up", [.back, .biceps], .repetition, .easy),
+        ("Chin-Up", [.back, .biceps], .repetition, .easy),
+        ("Deadlift", [.back, .hamstrings, .glutes], .repetition, .medium),
+        ("Sumo Deadlift", [.back, .hamstrings, .glutes, .quads], .repetition, .medium),
+        ("Rack Pull", [.back, .hamstrings, .glutes], .repetition, .medium),
+        ("Back Extension", [.back, .glutes, .hamstrings], .repetition, .easy),
+        ("Good Morning", [.back, .hamstrings, .glutes], .repetition, .medium),
         // Omuz
-        ("Overhead Press", [.shoulders, .triceps], .repetition),
-        ("Lateral Raise", [.shoulders], .repetition),
-        ("Rear Delt Fly", [.shoulders], .repetition),
-        ("Face Pull", [.shoulders, .back], .repetition),
+        ("Overhead Press", [.shoulders, .triceps], .repetition, .easy),
+        ("Seated Dumbbell Shoulder Press", [.shoulders, .triceps], .repetition, .easy),
+        ("Arnold Press", [.shoulders, .triceps], .repetition, .medium),
+        ("Lateral Raise", [.shoulders], .repetition, .easy),
+        ("Cable Lateral Raise", [.shoulders], .repetition, .easy),
+        ("Front Raise", [.shoulders], .repetition, .easy),
+        ("Rear Delt Fly", [.shoulders], .repetition, .easy),
+        ("Face Pull", [.shoulders, .back], .repetition, .medium),
+        ("Upright Row", [.shoulders, .back], .repetition, .easy),
+        ("Barbell Shrug", [.shoulders], .repetition, .easy),
+        ("Dumbbell Shrug", [.shoulders], .repetition, .easy),
         // Biseps
-        ("Barbell Curl", [.biceps], .repetition),
-        ("Dumbbell Curl", [.biceps], .repetition),
-        ("Hammer Curl", [.biceps, .forearms], .repetition),
+        ("Barbell Curl", [.biceps], .repetition, .easy),
+        ("Dumbbell Curl", [.biceps], .repetition, .easy),
+        ("Hammer Curl", [.biceps, .forearms], .repetition, .easy),
+        ("Concentration Curl", [.biceps], .repetition, .easy),
+        ("Preacher Curl", [.biceps], .repetition, .easy),
+        ("Cable Curl", [.biceps], .repetition, .easy),
+        ("Incline Dumbbell Curl", [.biceps], .repetition, .easy),
+        ("Spider Curl", [.biceps], .repetition, .easy),
+        ("EZ-Bar Curl", [.biceps], .repetition, .easy),
         // Triseps
-        ("Triceps Pushdown", [.triceps], .repetition),
-        ("Skull Crusher", [.triceps], .repetition),
-        ("Overhead Triceps Extension", [.triceps], .repetition),
-        ("Dips", [.triceps, .chest], .repetition),
+        ("Triceps Pushdown", [.triceps], .repetition, .easy),
+        ("Rope Triceps Pushdown", [.triceps], .repetition, .easy),
+        ("Skull Crusher", [.triceps], .repetition, .easy),
+        ("Overhead Triceps Extension", [.triceps], .repetition, .easy),
+        ("Dips", [.triceps, .chest], .repetition, .easy),
+        ("Close-Grip Bench Press", [.triceps, .chest], .repetition, .easy),
+        ("Triceps Kickback", [.triceps], .repetition, .easy),
+        ("Diamond Push-Up", [.triceps, .chest], .repetition, .medium),
         // Ön kol
-        ("Wrist Curl", [.forearms], .repetition),
+        ("Wrist Curl", [.forearms], .repetition, .easy),
+        ("Reverse Wrist Curl", [.forearms], .repetition, .easy),
+        ("Reverse Curl", [.forearms, .biceps], .repetition, .easy),
+        ("Farmer's Carry", [.forearms, .back], .timed, .medium),
         // Karın
-        ("Crunch", [.abs], .repetition),
-        ("Hanging Leg Raise", [.abs], .repetition),
-        ("Russian Twist", [.abs], .repetition),
-        ("Plank", [.abs], .timed),
-        ("Side Plank", [.abs], .timed),
+        ("Crunch", [.abs], .repetition, .easy),
+        ("Cable Crunch", [.abs], .repetition, .easy),
+        ("Bicycle Crunch", [.abs], .repetition, .easy),
+        ("Sit-Up", [.abs], .repetition, .easy),
+        ("Hanging Leg Raise", [.abs], .repetition, .hard),
+        ("Lying Leg Raise", [.abs], .repetition, .easy),
+        ("Russian Twist", [.abs], .repetition, .medium),
+        ("Mountain Climber", [.abs], .timed, .easy),
+        ("Plank", [.abs], .timed, .easy),
+        ("Side Plank", [.abs], .timed, .easy),
+        ("Ab Wheel Rollout", [.abs], .repetition, .medium),
+        ("Toe Touch", [.abs], .repetition, .easy),
         // Kalça
-        ("Hip Thrust", [.glutes], .repetition),
-        ("Romanian Deadlift", [.hamstrings, .glutes], .repetition),
+        ("Hip Thrust", [.glutes], .repetition, .medium),
+        ("Barbell Glute Bridge", [.glutes], .repetition, .medium),
+        ("Cable Glute Kickback", [.glutes], .repetition, .medium),
+        ("Romanian Deadlift", [.hamstrings, .glutes], .repetition, .medium),
+        ("Bulgarian Split Squat", [.quads, .glutes], .repetition, .medium),
         // Ön bacak
-        ("Squat", [.quads, .glutes], .repetition),
-        ("Leg Press", [.quads, .glutes], .repetition),
-        ("Leg Extension", [.quads], .repetition),
-        ("Lunge", [.quads, .glutes], .repetition),
-        ("Wall Sit", [.quads], .timed),
+        ("Squat", [.quads, .glutes], .repetition, .easy),
+        ("Front Squat", [.quads, .glutes], .repetition, .hard),
+        ("Hack Squat", [.quads, .glutes], .repetition, .easy),
+        ("Goblet Squat", [.quads, .glutes], .repetition, .easy),
+        ("Leg Press", [.quads, .glutes], .repetition, .easy),
+        ("Leg Extension", [.quads], .repetition, .easy),
+        ("Lunge", [.quads, .glutes], .repetition, .easy),
+        ("Walking Lunge", [.quads, .glutes], .repetition, .easy),
+        ("Step-Up", [.quads, .glutes], .repetition, .medium),
+        ("Wall Sit", [.quads], .timed, .easy), // DB'de yok, web kaynaklarına göre
         // Arka bacak
-        ("Leg Curl", [.hamstrings], .repetition),
+        ("Leg Curl", [.hamstrings], .repetition, .easy),
+        ("Stiff-Leg Deadlift", [.hamstrings, .glutes, .back], .repetition, .medium),
+        ("Nordic Curl", [.hamstrings], .repetition, .hard), // DB'de yok, web kaynaklarına göre
+        ("Glute-Ham Raise", [.hamstrings, .glutes], .repetition, .medium),
         // Kalf
-        ("Standing Calf Raise", [.calves], .repetition),
-        ("Seated Calf Raise", [.calves], .repetition),
+        ("Standing Calf Raise", [.calves], .repetition, .easy),
+        ("Seated Calf Raise", [.calves], .repetition, .easy),
+        ("Donkey Calf Raise", [.calves], .repetition, .medium),
     ]
 }

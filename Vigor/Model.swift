@@ -7,6 +7,19 @@
 
 import Foundation
 import SwiftData
+import SwiftUI
+
+enum Difficulty: String, Codable, CaseIterable {
+    case easy, medium, hard
+
+    var colors: [Color] {
+        switch self {
+        case .easy: [.brightTeal, .emerald, .darkForest]
+        case .medium: [ .neonLemon, .amber, .charredYellow]
+        case .hard: [ .plasmaOrange, .laserRed, .darkCrimson]
+        }
+    }
+}
 
 enum TargetMuscle: String, Codable, CaseIterable {
     case chest, back, shoulders, biceps, triceps, forearms
@@ -48,6 +61,17 @@ enum CardioActivity: String, Codable, CaseIterable {
         case .cycling: 7.5
         }
     }
+    
+    var primaryColor: Color {
+        switch self {
+        case .running:
+                .neonBlue
+        case .walking:
+                .plasmaOrange
+        case .cycling:
+                .neonPurple
+        }
+    }
 }
 
 enum GoalType: String, Codable, CaseIterable {
@@ -63,18 +87,6 @@ enum GoalType: String, Codable, CaseIterable {
             "Time"
         case .calories:
             "Calories"
-        }
-    }
-    var arrayIndex: Int {
-        switch self {
-        case .free:
-            -1
-        case .distance:
-            0
-        case .duration:
-            1
-        case .calories:
-            2
         }
     }
 
@@ -129,11 +141,21 @@ final class ExerciseType {
     var name: String
     var targetMuscles: [TargetMuscle]
     var kind: ExerciseKind
+    // Migrasyon sırasında eski kayıtlarda bu sütun NULL kalıyor (varsayılan değer uygulanmıyor),
+    // bu yüzden optional saklanıyor ve okurken .medium'a düşülüyor
+    @Attribute(originalName: "difficulty")
+    private var storedDifficulty: Difficulty?
+
+    var difficulty: Difficulty {
+        get { storedDifficulty ?? .medium }
+        set { storedDifficulty = newValue }
+    }
     
-    init(name: String, targetMuscles: [TargetMuscle], kind: ExerciseKind = .repetition) {
+    init(name: String, targetMuscles: [TargetMuscle], kind: ExerciseKind = .repetition, difficulty: Difficulty = .medium) {
         self.name = name
         self.targetMuscles = targetMuscles
         self.kind = kind
+        self.difficulty = difficulty
     }
 }
 
@@ -142,6 +164,8 @@ final class ExerciseType {
 final class Workout {
     var startDate: Date
     var endDate: Date?
+    var pausedAt: Date?
+    var pausedDuration: TimeInterval = 0
     
     @Relationship(deleteRule: .cascade, inverse: \WorkoutEntry.workout)
     var entries: [WorkoutEntry] = []
@@ -150,6 +174,21 @@ final class Workout {
         self.startDate = startDate
     }
 }
+
+//@Model
+//final class WorkoutTemplate {
+//    var name: String?
+//    var createdAt: Date?
+//    var lastUsed: Date?
+//    var entries: [WorkoutEntry] = []
+//    
+//    init(name: String? = nil, createdAt: Date? = nil, lastUsed: Date? = nil, entries: [WorkoutEntry]) {
+//        self.name = name
+//        self.createdAt = createdAt
+//        self.lastUsed = lastUsed
+//        self.entries = entries
+//    }
+//}
 
 // Antrenmandaki bir egzersiz kaydı
 @Model
@@ -160,10 +199,12 @@ final class WorkoutEntry {
     
     @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.entry)
     var sets: [ExerciseSet] = []
-    
+
     init(orderIndex: Int, exercise: ExerciseType) {
         self.orderIndex = orderIndex
         self.exercise = exercise
+        // İlk set egzersizin türüne göre oluşturulur
+        self.sets = [ExerciseSet(orderIndex: 0, kind: exercise.kind)]
     }
 }
 
@@ -171,14 +212,23 @@ final class WorkoutEntry {
 @Model
 final class ExerciseSet {
     var orderIndex: Int
-    var reps: Int?
-    var weightKg: Double?
+    var reps: Int? //tekrarlı egzersizler için
+    var durationSeconds: TimeInterval? //süre tutularak yapılan egzersizler için
+    var weightKg: Double = 0.0
     var entry: WorkoutEntry?
-    
-    init(orderIndex: Int, reps: Int? = nil, weightKg: Double? = nil) {
+
+    /// Egzersiz türü hangi alanın kullanılacağını belirler; diğer alan nil kalır
+    init(orderIndex: Int, kind: ExerciseKind, weightKg: Double = 0) {
         self.orderIndex = orderIndex
-        self.reps = reps
         self.weightKg = weightKg
+        switch kind {
+        case .repetition:
+            self.reps = 1
+            self.durationSeconds = nil
+        case .timed:
+            self.reps = nil
+            self.durationSeconds = 15
+        }
     }
 }
 
